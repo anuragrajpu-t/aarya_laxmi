@@ -13,17 +13,33 @@ export async function OPTIONS() {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    console.log(body);
-    console.log(body);
-    const symbol = body?.symbol;
-    const price = body?.price;
+    const contentType = req.headers.get('content-type') || '';
 
-    if (!symbol || typeof symbol !== 'string' || typeof price === 'undefined') {
-      return NextResponse.json(
-        { error: 'Invalid payload. Expected { symbol: string, price: number }' },
-        { status: 400, headers: CORS_HEADERS }
-      );
+    let messageText = '';
+
+    if (contentType.includes('application/json')) {
+      // JSON payload → convert to readable text
+      const json = await req.json().catch(() => null);
+      if (!json || typeof json !== 'object') {
+        return NextResponse.json(
+          { error: 'Invalid JSON body' },
+          { status: 400, headers: CORS_HEADERS }
+        );
+      }
+
+      // Convert the JSON to a pretty text block
+      messageText = Object.entries(json)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join('\n');
+    } else {
+      // Plain text or any other type → send raw text exactly as-is
+      messageText = await req.text();
+      if (!messageText.trim()) {
+        return NextResponse.json(
+          { error: 'Empty text body' },
+          { status: 400, headers: CORS_HEADERS }
+        );
+      }
     }
 
     const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -36,27 +52,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const text = `Symbol: ${symbol}\nPrice: ${price}`;
-    const url = `https://api.telegram.org/bot${token}/sendMessage`;
+    const telegramUrl = `https://api.telegram.org/bot${token}/sendMessage`;
 
-    const tgRes = await fetch(url, {
+    const tgRes = await fetch(telegramUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text }),
+      body: JSON.stringify({ chat_id: chatId, text: messageText }),
       cache: 'no-store',
     });
 
     const data = await tgRes.json().catch(() => ({}));
 
-    if (!tgRes.ok || (data && data.ok === false)) {
+    if (!tgRes.ok || data?.ok === false) {
       return NextResponse.json(
-        { error: 'Failed to send Telegram message', details: data },
+        { error: 'Failed to send message to Telegram', details: data },
         { status: 502, headers: CORS_HEADERS }
       );
     }
 
     return NextResponse.json(
-      { ok: true, result: data?.result ?? null },
+      { ok: true, result: data.result || null },
       { headers: CORS_HEADERS }
     );
   } catch (err: any) {
