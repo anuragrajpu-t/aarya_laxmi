@@ -15,6 +15,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     console.log(body);
+    console.log(body);
     const symbol = body?.symbol;
     const price = body?.price;
 
