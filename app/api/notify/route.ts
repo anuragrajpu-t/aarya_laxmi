@@ -15,6 +15,7 @@ export async function POST(req: NextRequest) {
   try {
     // Always read as plain text
     const text = await req.text();
+    console.log(text)
 
     if (!text.trim()) {
       return NextResponse.json(
