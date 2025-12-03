@@ -13,33 +13,14 @@ export async function OPTIONS() {
 
 export async function POST(req: NextRequest) {
   try {
-    const contentType = req.headers.get('content-type') || '';
+    // Always read as plain text
+    const text = await req.text();
 
-    let messageText = '';
-
-    if (contentType.includes('application/json')) {
-      // JSON payload → convert to readable text
-      const json = await req.json().catch(() => null);
-      if (!json || typeof json !== 'object') {
-        return NextResponse.json(
-          { error: 'Invalid JSON body' },
-          { status: 400, headers: CORS_HEADERS }
-        );
-      }
-
-      // Convert the JSON to a pretty text block
-      messageText = Object.entries(json)
-        .map(([k, v]) => `${k}: ${v}`)
-        .join('\n');
-    } else {
-      // Plain text or any other type → send raw text exactly as-is
-      messageText = await req.text();
-      if (!messageText.trim()) {
-        return NextResponse.json(
-          { error: 'Empty text body' },
-          { status: 400, headers: CORS_HEADERS }
-        );
-      }
+    if (!text.trim()) {
+      return NextResponse.json(
+        { error: 'Empty text body' },
+        { status: 400, headers: CORS_HEADERS }
+      );
     }
 
     const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -52,12 +33,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const telegramUrl = `https://api.telegram.org/bot${token}/sendMessage`;
+    const url = `https://api.telegram.org/bot${token}/sendMessage`;
 
-    const tgRes = await fetch(telegramUrl, {
+    const tgRes = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: messageText }),
+      body: JSON.stringify({ chat_id: chatId, text }),
       cache: 'no-store',
     });
 
@@ -65,13 +46,13 @@ export async function POST(req: NextRequest) {
 
     if (!tgRes.ok || data?.ok === false) {
       return NextResponse.json(
-        { error: 'Failed to send message to Telegram', details: data },
+        { error: 'Failed to send Telegram message', details: data },
         { status: 502, headers: CORS_HEADERS }
       );
     }
 
     return NextResponse.json(
-      { ok: true, result: data.result || null },
+      { ok: true, result: data.result ?? null },
       { headers: CORS_HEADERS }
     );
   } catch (err: any) {
